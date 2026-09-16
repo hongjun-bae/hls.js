@@ -170,7 +170,7 @@ export function mergeDetails(
     newDetails,
     (oldFrag, newFrag, newFragIndex, newFragments) => {
       if (
-        (!newDetails.startCC || newDetails.skippedSegments) &&
+        (!newDetails.hasDiscontinuitySequence || newDetails.skippedSegments) &&
         newFrag.cc !== oldFrag.cc
       ) {
         const ccOffset = oldFrag.cc - newFrag.cc;
@@ -269,7 +269,7 @@ export function mergeDetails(
     }
     newDetails.endCC = newFragments[newFragments.length - 1].cc;
   }
-  if (!newDetails.startCC) {
+  if (!newDetails.hasDiscontinuitySequence) {
     const fragPriorToNewStart = getFragmentWithSN(
       oldDetails,
       newDetails.startSN - 1,

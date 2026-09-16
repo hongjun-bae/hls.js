@@ -606,6 +606,7 @@ export default class M3U8Parser {
               assignMultipleMediaPlaylistTagOccuranceError(level, tag, result);
             }
             level.startCC = discontinuityCounter = parseInt(value1);
+            level.hasDiscontinuitySequence = true;
             fragments.forEach(
               (frag) => frag && (frag.cc = discontinuityCounter),
             );

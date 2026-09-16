@@ -30,6 +30,9 @@ export class LevelDetails {
   public advanced: boolean = true;
   public misses: number = 0;
   public startCC: number = 0;
+  // Whether the playlist declared EXT-X-DISCONTINUITY-SEQUENCE. `startCC` alone
+  // cannot tell a missing tag from an explicit `:0`.
+  public hasDiscontinuitySequence: boolean = false;
   public startSN: number = 0;
   public startTimeOffset: number | null = null;
   public targetduration: number = 0;

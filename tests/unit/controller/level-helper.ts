@@ -216,6 +216,65 @@ describe('LevelHelper Tests', function () {
       expect(newPlaylist.playlistParsingError).to.be.null;
     });
 
+    it('keeps a declared discontinuity when the playlist sets EXT-X-DISCONTINUITY-SEQUENCE:0', function () {
+      // `startCC` defaults to 0, so it cannot tell a missing tag from an
+      // explicit `:0`. Re-aligning here rewrites the cc of a segment the
+      // playlist just declared to be past a discontinuity, which erases the
+      // discontinuity from the merged details.
+      const withTag = (discontinuity: boolean) => `#EXTM3U
+#EXT-X-VERSION:9
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:1
+#EXT-X-DISCONTINUITY-SEQUENCE:0
+#EXTINF:6,
+1.mp4
+#EXTINF:6,
+2.mp4
+${discontinuity ? '#EXT-X-DISCONTINUITY\n' : ''}#EXTINF:6,
+3.mp4
+`;
+      const oldPlaylist = parseLevelPlaylist(withTag(false));
+      const newPlaylist = parseLevelPlaylist(withTag(true));
+      expect(newPlaylist.hasDiscontinuitySequence, 'tag parsed').to.be.true;
+      expect(getFragmentSequenceNumbers(newPlaylist), 'parsed').to.equal(
+        '1-0,2-0,3-1',
+      );
+
+      mergeDetails(oldPlaylist, newPlaylist, logger);
+
+      expect(getFragmentSequenceNumbers(newPlaylist), 'merged').to.equal(
+        '1-0,2-0,3-1',
+      );
+      expect(newPlaylist).to.include({ startCC: 0, endCC: 1 });
+    });
+
+    it('still aligns discontinuity sequence numbers when EXT-X-DISCONTINUITY-SEQUENCE is missing', function () {
+      // Regression guard for #7163: playlists with discontinuities but no
+      // EXT-X-DISCONTINUITY-SEQUENCE still get their cc aligned to the
+      // previous update.
+      const noTag = (discontinuity: boolean) => `#EXTM3U
+#EXT-X-VERSION:9
+#EXT-X-TARGETDURATION:6
+#EXT-X-MEDIA-SEQUENCE:1
+#EXTINF:6,
+1.mp4
+#EXTINF:6,
+2.mp4
+${discontinuity ? '#EXT-X-DISCONTINUITY\n' : ''}#EXTINF:6,
+3.mp4
+`;
+      const oldPlaylist = parseLevelPlaylist(noTag(false));
+      const newPlaylist = parseLevelPlaylist(noTag(true));
+      expect(newPlaylist.hasDiscontinuitySequence, 'tag parsed').to.be.false;
+
+      mergeDetails(oldPlaylist, newPlaylist, logger);
+
+      expect(getFragmentSequenceNumbers(newPlaylist), 'merged').to.equal(
+        '1-0,2-0,3-0',
+      );
+      expect(newPlaylist.playlistParsingError).to.be.null;
+    });
+
     it('applies expected sliding when there is no segment overlap', function () {
       const oldPlaylist = generatePlaylist([1, 2, 3]);
       const newPlaylist = generatePlaylist([5, 6, 7]);
