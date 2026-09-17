@@ -495,7 +495,10 @@ export default class ErrorController
     }
 
     const flags = data.errorAction?.flags || 0;
-    if (flags & ErrorActionFlags.ResetMediaSource) {
+    // Do not recover an error that is already fatal. recoverMediaError() re-attaches media and
+    // resumes loading, which the stopLoad() below then undoes. Once an error is fatal the
+    // application owns recovery.
+    if (flags & ErrorActionFlags.ResetMediaSource && !data.fatal) {
       this.hls.recoverMediaError();
     }
 

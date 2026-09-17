@@ -3,6 +3,10 @@ import { fakeServer } from 'nise';
 import sinon from 'sinon';
 import sinonChai from 'sinon-chai';
 import { multivariantPlaylistWithRedundantFallbacks } from './level-controller';
+import {
+  ErrorActionFlags,
+  NetworkErrorAction,
+} from '../../../src/controller/error-controller';
 import { ErrorDetails, ErrorTypes } from '../../../src/errors';
 import { Events } from '../../../src/events';
 import Hls from '../../../src/hls';
@@ -715,18 +719,38 @@ segment.mp4
   });
 
   describe('Media Error Handling', function () {
-    it('treats MEDIA_SOURCE_REQUIRES_RESET as recoverable and calls recoverMediaError', function () {
-      const recoverSpy = sinon.spy(hls, 'recoverMediaError');
-      const data: any = {
+    function mediaSourceRequiresReset(errorAction?: any): any {
+      return {
         type: ErrorTypes.MEDIA_ERROR,
         details: ErrorDetails.MEDIA_SOURCE_REQUIRES_RESET,
         fatal: false,
+        errorAction,
         error: new Error(
           'MediaSource requires reset while media is still attached',
         ),
       };
+    }
+
+    it('treats a resolved MEDIA_SOURCE_REQUIRES_RESET as recoverable and calls recoverMediaError', function () {
+      const recoverSpy = sinon.spy(hls, 'recoverMediaError');
+      hls.trigger(
+        Events.ERROR,
+        mediaSourceRequiresReset({
+          action: NetworkErrorAction.SendAlternateToPenaltyBox,
+          flags: ErrorActionFlags.None,
+          resolved: true,
+        }),
+      );
+      expect(recoverSpy, 'recoverMediaError').to.have.been.calledOnce;
+    });
+
+    it('does not call recoverMediaError once MEDIA_SOURCE_REQUIRES_RESET is fatal', function () {
+      const recoverSpy = sinon.spy(hls, 'recoverMediaError');
+      const data = mediaSourceRequiresReset();
       hls.trigger(Events.ERROR, data);
-      expect(recoverSpy).to.have.been.calledOnce;
+      expect(data.fatal, 'promoted to fatal with no alternate').to.equal(true);
+      expect(recoverSpy, 'recoverMediaError').to.have.not.been.called;
+      expect(hls.stopLoad, 'stopLoad').to.have.been.called;
     });
   });
 
