@@ -210,6 +210,9 @@ export function mergeDetails(
         newFrag.stats = oldFrag.stats;
       }
 
+      // Use locally set gap or GAP tag, as the part callback below already does
+      newFrag.gap = oldFrag.gap || newFrag.gap;
+
       if (oldFrag.initSegment) {
         newFrag.initSegment = oldFrag.initSegment;
         currentInitSegment = oldFrag.initSegment;
@@ -221,6 +224,18 @@ export function mergeDetails(
   const fragmentsToCheck = newDetails.fragmentHint
     ? newFragments.concat(newDetails.fragmentHint)
     : newFragments;
+
+  // mapFragmentIntersection leaves out an old preload hint that has no duration yet, so a gap
+  // set on one is lost when the hint becomes a fragment. Carry that one field across.
+  const oldHint = oldDetails.fragmentHint;
+  if (oldHint?.gap && !oldHint.duration) {
+    const replacement = fragmentsToCheck.find(
+      (frag) => frag?.sn === oldHint.sn,
+    );
+    if (replacement) {
+      replacement.gap = true;
+    }
+  }
   if (currentInitSegment) {
     fragmentsToCheck.forEach((frag) => {
       if (
