@@ -19,7 +19,7 @@ import type {
   FragmentEntity,
   FragmentTimeRange,
 } from '../types/fragment-tracker';
-import type { PlaylistLevelType } from '../types/loader';
+import { PlaylistLevelType } from '../types/loader';
 
 export const enum FragmentState {
   NOT_LOADED = 'NOT_LOADED',
@@ -294,6 +294,20 @@ export class FragmentTracker implements ComponentAPI {
 
   public addAsGap(frag: MediaFragment) {
     frag.gap = true;
+    // A live playlist refresh replaces fragment objects, so the appended copy is not always
+    // the one selection and the loader read. Mark the fragment holding the same position.
+    const details =
+      frag.type === PlaylistLevelType.MAIN
+        ? this.hls?.latestLevelDetails
+        : null;
+    if (details) {
+      const selectable =
+        details.fragments[frag.sn - details.startSN] ||
+        (details.fragmentHint?.sn === frag.sn ? details.fragmentHint : null);
+      if (selectable && selectable !== frag && selectable.sn === frag.sn) {
+        selectable.gap = true;
+      }
+    }
     this.removeFragment(frag);
     this.fragBuffered(frag, true);
   }
@@ -612,6 +626,16 @@ export class FragmentTracker implements ComponentAPI {
         this.removeFragment(frag);
       }
     });
+  }
+
+  /** Fragments determined to be gaps, for callers that clear buffer state and re-add them. */
+  public gapFragments(): MediaFragment[] {
+    if (!this.hasGaps) {
+      return [];
+    }
+    return Object.keys(this.fragments)
+      .map((key) => this.fragments[key]?.body)
+      .filter((frag): frag is MediaFragment => !!frag?.gap);
   }
 
   public removeFragment(fragment: Fragment) {
