@@ -128,6 +128,7 @@ export default class BaseStreamController
   protected buffering: boolean = true;
   protected loadingParts: boolean = false;
   private loopSn?: string | number;
+  private keepGapsOnSeek: boolean = false;
 
   constructor(
     hls: Hls,
@@ -368,7 +369,12 @@ export default class BaseStreamController
       return;
     }
     this.loadingParts = false;
-    this.fragmentTracker.removeAllFragments();
+    // Keep tracked gaps to skip segments given up on after re-attach (`recoverMediaError()`)
+    const { fragmentTracker } = this;
+    const gaps = fragmentTracker.gapFragments();
+    fragmentTracker.removeAllFragments();
+    gaps.forEach((frag) => fragmentTracker.addAsGap(frag));
+    this.keepGapsOnSeek = gaps.some((frag) => frag.type === this.playlistType);
     this.stopLoad();
   }
 
@@ -438,13 +444,18 @@ export default class BaseStreamController
     }
 
     if (media) {
-      // Remove gap fragments
-      this.fragmentTracker.removeFragmentsInRange(
-        currentTime,
-        Infinity,
-        this.playlistType,
-        true,
-      );
+      if (this.keepGapsOnSeek) {
+        // Not a viewer seek: keep the gaps carried across re-attach.
+        this.keepGapsOnSeek = false;
+      } else {
+        // Remove gap fragments
+        this.fragmentTracker.removeFragmentsInRange(
+          currentTime,
+          Infinity,
+          this.playlistType,
+          true,
+        );
+      }
 
       // Don't set lastCurrentTime with backward seeks (allows for frag selection with strict tolerances)
       const lastCurrentTime = this.lastCurrentTime;
@@ -1613,6 +1624,20 @@ export default class BaseStreamController
         this.nextLoadPosition = programFrag.start;
       }
     }
+    while (programFrag && this.fragmentTracker.isGap(programFrag)) {
+      // A full-segment load clears gap set without a GAP tag, and a playlist refresh drops
+      // it from the fragment object.
+      programFrag.gap = true;
+      const afterGap = this.filterReplacedPrimary(
+        getNextFrag(levelDetails, programFrag.sn),
+        levelDetails,
+      );
+      if (!afterGap) {
+        return null;
+      }
+      this.nextLoadPosition = afterGap.start;
+      programFrag = afterGap;
+    }
     return programFrag;
   }
 
@@ -1758,7 +1783,8 @@ export default class BaseStreamController
       if (nextPart > -1 && targetBufferTime < part.start) {
         break;
       }
-      const loaded = part.loaded || part.gap;
+      // fragment-loader refuses a part whose fragment is a gap, so selecting one loads nothing.
+      const loaded = part.loaded || part.gap || !!part.fragment.gap;
       if (loaded) {
         nextPart = -1;
       } else if (

@@ -38,6 +38,8 @@ type BaseStreamControllerTestable = Omit<
   | 'fragPrevious'
   | 'tickImmediate'
   | 'hls'
+  | 'getNextFragment'
+  | 'onMediaDetaching'
 > & {
   media: HTMLMediaElement | null;
   _streamEnded: (bufferInfo: BufferInfo, levelDetails: LevelDetails) => boolean;
@@ -60,6 +62,11 @@ type BaseStreamControllerTestable = Omit<
   fragPrevious: MediaFragment | null;
   tickImmediate: () => void;
   hls: Hls;
+  getNextFragment: (
+    pos: number,
+    levelDetails: LevelDetails,
+  ) => MediaFragment | null;
+  onMediaDetaching: (event: any, data: any) => void;
 };
 
 describe('BaseStreamController', function () {
@@ -78,6 +85,16 @@ describe('BaseStreamController', function () {
       isEndListAppended() {
         return true;
       },
+      gapSn: null,
+      isGap(frag) {
+        return this.gapSn !== null && frag.sn === this.gapSn;
+      },
+      gapFragments() {
+        return this.gaps || [];
+      },
+      gaps: [],
+      addAsGap: sinon.spy(),
+      removeAllFragments: sinon.spy(),
       removeFragmentsInRange: sinon.spy(),
     };
     baseStreamController = new BaseStreamControllerImpl(
@@ -161,6 +178,35 @@ describe('BaseStreamController', function () {
     });
   });
 
+  describe('getNextFragment with a fragment tracked as a gap', function () {
+    it('returns the fragment after it and marks the playlist copy', function () {
+      const levelDetails = levelDetailsWithEndSequenceVodOrLive(4);
+      fragmentTracker.gapSn = 1;
+      const frag = baseStreamController.getNextFragment(5, levelDetails);
+      expect(frag?.sn, 'skips to the next fragment').to.equal(2);
+      expect(levelDetails.fragments[1].gap, 'marks the playlist copy').to.equal(
+        true,
+      );
+      expect(baseStreamController.nextLoadPosition).to.equal(10);
+    });
+
+    it('returns the fragment itself when the tracker reports no gap', function () {
+      const levelDetails = levelDetailsWithEndSequenceVodOrLive(4);
+      fragmentTracker.gapSn = null;
+      expect(
+        baseStreamController.getNextFragment(5, levelDetails)?.sn,
+      ).to.equal(1);
+    });
+
+    it('returns null when the fragment tracked as a gap is the last one', function () {
+      const levelDetails = levelDetailsWithEndSequenceVodOrLive(2);
+      fragmentTracker.gapSn = 1;
+      expect(baseStreamController.getNextFragment(5, levelDetails)).to.equal(
+        null,
+      );
+    });
+  });
+
   describe('Seeking Logic', function () {
     describe('onMediaSeeking', function () {
       it('should handle backward seek behavior correctly', function () {
@@ -212,6 +258,48 @@ describe('BaseStreamController', function () {
 
         expect(resetSpy).to.have.been.calledOnce;
         resetSpy.restore();
+      });
+
+      it('keeps gaps on the seek that follows a detach which carried them', function () {
+        media.removeEventListener = sinon.spy();
+        fragmentTracker.gaps = [{ sn: 1, type: PlaylistLevelType.MAIN }];
+        baseStreamController.onMediaDetaching(null, {});
+        baseStreamController.media = media;
+        media.currentTime = 10.0;
+
+        baseStreamController.onMediaSeeking();
+        expect(
+          fragmentTracker.removeFragmentsInRange,
+          'the re-attach seek keeps them',
+        ).to.have.not.been.called;
+
+        baseStreamController.onMediaSeeking();
+        expect(
+          fragmentTracker.removeFragmentsInRange,
+          'a later seek removes them',
+        ).to.have.been.calledOnce;
+      });
+
+      it('does not keep gaps carried for another playlist type', function () {
+        media.removeEventListener = sinon.spy();
+        fragmentTracker.gaps = [{ sn: 1, type: PlaylistLevelType.AUDIO }];
+        baseStreamController.onMediaDetaching(null, {});
+        baseStreamController.media = media;
+        media.currentTime = 10.0;
+
+        baseStreamController.onMediaSeeking();
+        expect(fragmentTracker.removeFragmentsInRange).to.have.been.calledOnce;
+      });
+
+      it('does not keep gaps when the detach carried none', function () {
+        media.removeEventListener = sinon.spy();
+        fragmentTracker.gaps = [];
+        baseStreamController.onMediaDetaching(null, {});
+        baseStreamController.media = media;
+        media.currentTime = 10.0;
+
+        baseStreamController.onMediaSeeking();
+        expect(fragmentTracker.removeFragmentsInRange).to.have.been.calledOnce;
       });
 
       it('should call fragmentTracker.removeFragmentsInRange when media exists', function () {

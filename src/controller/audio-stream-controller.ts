@@ -1,4 +1,5 @@
 import BaseStreamController, { State } from './base-stream-controller';
+import { SOURCE_BUFFER_ERROR_NAME } from './buffer-controller';
 import { findNearestWithCC } from './fragment-finders';
 import { FragmentState } from './fragment-tracker';
 import ChunkCache from '../demux/chunk-cache';
@@ -840,9 +841,12 @@ class AudioStreamController
         if (data.parent !== 'audio') {
           return;
         }
+        // appendErrors hits appendErrorMaxRetry on the same refusal, leaving no cycle for the gap.
         if (
           data.frag &&
-          (data.appendsWithoutProgress || 0) >= this.config.appendErrorMaxRetry
+          (data.appendsWithoutProgress || 0) >=
+            this.config.appendErrorMaxRetry -
+              (data.error?.name === SOURCE_BUFFER_ERROR_NAME ? 1 : 0)
         ) {
           this.warn(
             `Marking fragment ${data.frag.sn} of track ${data.frag.level} as a gap after ${data.appendsWithoutProgress} appends without buffered range growth, to prevent loop loading`,

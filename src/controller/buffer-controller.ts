@@ -70,6 +70,7 @@ const VIDEO_CODEC_PROFILE_REPLACE =
   /(avc[1234]|hvc1|hev1|dvh[1e]|vp09|av01)(?:\.[^.,]+)+/;
 
 const TRACK_REMOVED_ERROR_NAME = 'HlsJsTrackRemovedError';
+export const SOURCE_BUFFER_ERROR_NAME = 'HlsJsSourceBufferError';
 
 const LOOP_FLUSH_SAFETY_MARGIN = 0.25;
 
@@ -259,7 +260,7 @@ export default class BufferController extends Logger implements ComponentAPI {
 
   private initTracks() {
     const tracks = {};
-    this.resetAppendProgress();
+    this.fragmentAppendProgress = Object.create(null);
     this.sourceBuffers = [
       [null, null],
       [null, null],
@@ -1013,8 +1014,28 @@ transfer tracks: ${stringify(transferredTracks, (key, value) => (key === 'initSe
         }
 
         // Append exceptions use the existing append-error path.
-        if (trackProgress) {
-          this.getFragmentAppendProgress(frag as MediaFragment).errored = true;
+        // fragment-level refusals consume the append-retry budget; parts included
+        const appendRefused =
+          error.name === SOURCE_BUFFER_ERROR_NAME &&
+          isMediaFragment(frag) &&
+          !frag.gap &&
+          !chunkMeta.iframe;
+        if (appendRefused || trackProgress) {
+          const progress = this.getFragmentAppendProgress(
+            frag as MediaFragment,
+          );
+          if (appendRefused && !progress.errored) {
+            progress.errored = true;
+            this.countAppendWithoutProgress(
+              frag as MediaFragment,
+              chunkMeta,
+              error,
+            );
+            if (!this.hls) {
+              return;
+            }
+          }
+          progress.errored = true;
         }
         // in case any error occured while appending, put back segment in segments table
         const event: ErrorData = {
@@ -1439,6 +1460,15 @@ transfer tracks: ${stringify(transferredTracks, (key, value) => (key === 'initSe
       return;
     }
     // Also count parsed fragments that produced no append operations.
+    this.countAppendWithoutProgress(frag, chunkMeta);
+  }
+
+  private countAppendWithoutProgress(
+    frag: MediaFragment,
+    chunkMeta: ChunkMetadata,
+    appendError?: Error,
+  ) {
+    const key = appendProgressKey(frag);
     const count = (this.appendsWithoutProgress[key] || 0) + 1;
     // Capture values before a synchronous ERROR listener can destroy Hls.
     const hls = this.hls;
@@ -1459,9 +1489,11 @@ transfer tracks: ${stringify(transferredTracks, (key, value) => (key === 'initSe
       chunkMeta,
       parent: frag.type,
       appendsWithoutProgress: count,
-      error: new Error(
-        `Fragment append did not increase buffered coverage (${count})`,
-      ),
+      error:
+        appendError ||
+        new Error(
+          `Fragment append did not increase buffered coverage (${count})`,
+        ),
     });
   }
 
@@ -2067,6 +2099,7 @@ transfer tracks: ${stringify(transferredTracks, (key, value) => (key === 'initSe
     const error = new Error(
       `${type} SourceBuffer error. MediaSource readyState: ${readyState}`,
     );
+    error.name = SOURCE_BUFFER_ERROR_NAME;
     this.error(`${error.message}`, event);
     // according to http://www.w3.org/TR/media-source/#sourcebuffer-append-error
     // SourceBuffer errors are not necessarily fatal; if so, the HTMLMediaElement will fire an error event

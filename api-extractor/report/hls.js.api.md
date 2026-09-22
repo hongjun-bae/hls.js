@@ -2130,6 +2130,7 @@ export class FragmentTracker implements ComponentAPI {
     detectPartialFragments(data: FragBufferedData): void;
     // (undocumented)
     fragBuffered(frag: MediaFragment, force?: true): FragmentEntity | undefined;
+    gapFragments(): MediaFragment[];
     getAppendedFrag(position: number, levelType: PlaylistLevelType): MediaFragment | Part | null;
     getBackBufferEvictionEnd(beforePosition: number, levelType: PlaylistLevelType, bytesNeeded: number): number;
     getBufferedFrag(position: number, levelType: PlaylistLevelType): MediaFragment | null;
@@ -2144,6 +2145,7 @@ export class FragmentTracker implements ComponentAPI {
     hasParts(type: PlaylistLevelType): boolean;
     // (undocumented)
     isEndListAppended(type: PlaylistLevelType): boolean;
+    isGap(frag: Fragment): boolean;
     // (undocumented)
     removeAllFragments(): void;
     // (undocumented)

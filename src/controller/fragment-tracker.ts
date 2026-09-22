@@ -631,6 +631,23 @@ export class FragmentTracker implements ComponentAPI {
     }
   }
 
+  /** Whether the fragment tracked at this key is a gap. A playlist refresh drops it from the object. */
+  public isGap(frag: Fragment): boolean {
+    return (
+      this.hasGaps && this.fragments[getFragmentKey(frag)]?.body.gap === true
+    );
+  }
+
+  /** Fragments determined to be gaps, for callers that clear buffer state and re-add them. */
+  public gapFragments(): MediaFragment[] {
+    if (!this.hasGaps) {
+      return [];
+    }
+    return Object.keys(this.fragments)
+      .map((key) => this.fragments[key]?.body)
+      .filter((frag): frag is MediaFragment => !!frag?.gap);
+  }
+
   public removeAllFragments() {
     this.fragments = Object.create(null);
     this.endListFragments = Object.create(null);
