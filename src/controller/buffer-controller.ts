@@ -80,6 +80,7 @@ type FragmentAppendProgress = {
   stats: LoadStats;
   progressed: boolean;
   errored: boolean;
+  refusedOn?: MediaSource | null;
   fullyBuffered: Partial<Record<SourceBufferName, boolean>>;
 };
 
@@ -1014,28 +1015,25 @@ transfer tracks: ${stringify(transferredTracks, (key, value) => (key === 'initSe
         }
 
         // Append exceptions use the existing append-error path.
-        // fragment-level refusals consume the append-retry budget; parts included
-        const appendRefused =
+        if (
           error.name === SOURCE_BUFFER_ERROR_NAME &&
           isMediaFragment(frag) &&
           !frag.gap &&
-          !chunkMeta.iframe;
-        if (appendRefused || trackProgress) {
-          const progress = this.getFragmentAppendProgress(
-            frag as MediaFragment,
-          );
-          if (appendRefused && !progress.errored) {
+          !chunkMeta.iframe
+        ) {
+          // Count once per append cycle. Part loads keep frag.stats, so the cycle is the
+          // MediaSource, which a recoverMediaError() reset replaces.
+          const progress = this.getFragmentAppendProgress(frag);
+          if (progress.refusedOn !== this.mediaSource) {
+            progress.refusedOn = this.mediaSource;
             progress.errored = true;
-            this.countAppendWithoutProgress(
-              frag as MediaFragment,
-              chunkMeta,
-              error,
-            );
+            this.countAppendWithoutProgress(frag, chunkMeta, error);
             if (!this.hls) {
               return;
             }
           }
-          progress.errored = true;
+        } else if (trackProgress) {
+          this.getFragmentAppendProgress(frag as MediaFragment).errored = true;
         }
         // in case any error occured while appending, put back segment in segments table
         const event: ErrorData = {
