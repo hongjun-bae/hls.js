@@ -1,5 +1,4 @@
 import BaseStreamController, { State } from './base-stream-controller';
-import { SOURCE_BUFFER_ERROR_NAME } from './buffer-controller';
 import { findFragmentByPTS } from './fragment-finders';
 import { FragmentState } from './fragment-tracker';
 import { MAX_START_GAP_JUMP } from './gap-controller';
@@ -1039,18 +1038,18 @@ export default class StreamController
         if (data.parent !== 'main') {
           return;
         }
-        // appendErrors hits appendErrorMaxRetry on the same refusal, leaving no cycle for the gap.
         if (
           data.frag &&
-          (data.appendsWithoutProgress || 0) >=
-            this.config.appendErrorMaxRetry -
-              (data.error?.name === SOURCE_BUFFER_ERROR_NAME ? 1 : 0)
+          (data.appendsWithoutProgress || 0) >= this.config.appendErrorMaxRetry
         ) {
           this.warn(
             `Marking fragment ${data.frag.sn} of level ${data.frag.level} as a gap after ${data.appendsWithoutProgress} appends without buffered range growth, to prevent loop loading`,
           );
           this.fragmentTracker.addAsGap(data.frag as MediaFragment);
         }
+        break;
+      case ErrorDetails.MEDIA_SOURCE_REQUIRES_RESET:
+        this.onSourceBufferError(PlaylistLevelType.MAIN, data);
         break;
       case ErrorDetails.BUFFER_ADD_CODEC_ERROR:
       case ErrorDetails.BUFFER_APPEND_ERROR:

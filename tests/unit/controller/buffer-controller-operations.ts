@@ -212,6 +212,7 @@ describe('BufferController with attached media', function () {
       expect(sbErrorObject.message).equals(
         'audio SourceBuffer error. MediaSource readyState: open',
       );
+      expect(sbErrorObject.name).equals(SOURCE_BUFFER_ERROR_NAME);
       expect(
         triggerSpy,
         'ERROR should have been triggered in response to the SourceBuffer error',
@@ -770,122 +771,6 @@ describe('BufferController with attached media', function () {
       expect(errors[0].appendsWithoutProgress).to.equal(1);
       expect(errors[1].appendsWithoutProgress).to.equal(2);
       expect(errors[1].frag?.sn).to.equal(1);
-    });
-
-    const rejectAppend = (
-      frag: Fragment,
-      chunkMeta: ChunkMetadata = new ChunkMetadata(0, frag.sn as number, 0, 0),
-      part: Part | null = null,
-    ) => {
-      hls.trigger(Events.BUFFER_APPENDING, {
-        parent: PlaylistLevelType.MAIN,
-        type: 'video',
-        data: new Uint8Array(),
-        frag,
-        part,
-        chunkMeta,
-      });
-      const buffer = getSourceBufferTrack(bufferController, 'video')?.buffer;
-      expect(buffer).to.not.equal(undefined);
-      buffer!.dispatchEvent(new Event('error'));
-    };
-
-    it('counts a refused append toward the fragment and names the SourceBuffer error', function () {
-      const noProgress: ErrorData[] = [];
-      hls.on(Events.ERROR, (event, data) => {
-        if (data.details === ErrorDetails.BUFFER_APPEND_NO_PROGRESS) {
-          noProgress.push(data);
-        }
-      });
-      const frag = newFrag(1);
-      rejectAppend(frag);
-      frag.stats = new LoadStats();
-      rejectAppend(frag);
-      expect(noProgress).to.have.lengthOf(2);
-      expect(noProgress[0].appendsWithoutProgress).to.equal(1);
-      expect(noProgress[1].appendsWithoutProgress).to.equal(2);
-      expect(noProgress[0].error.name).to.equal(SOURCE_BUFFER_ERROR_NAME);
-      expect(noProgress[0].frag?.sn).to.equal(1);
-    });
-
-    it('counts refused appends of one load cycle once', function () {
-      const noProgress: ErrorData[] = [];
-      hls.on(Events.ERROR, (event, data) => {
-        if (data.details === ErrorDetails.BUFFER_APPEND_NO_PROGRESS) {
-          noProgress.push(data);
-        }
-      });
-      const frag = newFrag(1);
-      rejectAppend(frag);
-      rejectAppend(frag);
-      rejectAppend(frag);
-      expect(noProgress).to.have.lengthOf(1);
-      expect(noProgress[0].appendsWithoutProgress).to.equal(1);
-    });
-
-    it('counts a refused part append once per append cycle across MediaSource resets', function () {
-      const noProgress: ErrorData[] = [];
-      hls.on(Events.ERROR, (event, data) => {
-        if (data.details === ErrorDetails.BUFFER_APPEND_NO_PROGRESS) {
-          noProgress.push(data);
-        }
-      });
-      const frag = newFrag(1);
-      const part = {
-        index: 0,
-        stats: new LoadStats(),
-        elementaryStreams: frag.elementaryStreams,
-      } as unknown as Part;
-      const partMeta = new ChunkMetadata(0, 1, 0, 0, 0, true);
-      rejectAppend(frag, partMeta, part);
-      rejectAppend(frag, partMeta, part);
-      expect(noProgress, 'one cycle counts once').to.have.lengthOf(1);
-      (bufferController as any).mediaSource = {};
-      rejectAppend(frag, partMeta, part);
-      expect(noProgress, 'a reset starts a new cycle').to.have.lengthOf(2);
-      expect(noProgress[1].appendsWithoutProgress).to.equal(2);
-    });
-
-    it('keeps the refused-append count across a SourceBuffer rebuild', function () {
-      const frag = newFrag(1);
-      const key = `${frag.type}_${frag.sn}_${frag.level}`;
-      rejectAppend(frag);
-      expect((bufferController as any).appendsWithoutProgress[key]).to.equal(1);
-      (bufferController as any).initTracks();
-      expect(
-        (bufferController as any).appendsWithoutProgress[key],
-        'the per-fragment count outlives the rebuild',
-      ).to.equal(1);
-      expect(
-        Object.keys((bufferController as any).fragmentAppendProgress),
-        'per-load state does not',
-      ).to.have.lengthOf(0);
-    });
-
-    it('does not count a refused append of an init segment', function () {
-      const noProgress: ErrorData[] = [];
-      hls.on(Events.ERROR, (event, data) => {
-        if (data.details === ErrorDetails.BUFFER_APPEND_NO_PROGRESS) {
-          noProgress.push(data);
-        }
-      });
-      const initFrag = newFrag(1);
-      initFrag.sn = 'initSegment';
-      rejectAppend(initFrag);
-      expect(noProgress).to.have.lengthOf(0);
-    });
-
-    it('does not count a refused append of a fragment already a gap', function () {
-      const noProgress: ErrorData[] = [];
-      hls.on(Events.ERROR, (event, data) => {
-        if (data.details === ErrorDetails.BUFFER_APPEND_NO_PROGRESS) {
-          noProgress.push(data);
-        }
-      });
-      const gapFrag = newFrag(1);
-      gapFrag.gap = true;
-      rejectAppend(gapFrag);
-      expect(noProgress).to.have.lengthOf(0);
     });
 
     it('clears an exhausted count before emitting the terminal error', function () {

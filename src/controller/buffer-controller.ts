@@ -80,7 +80,6 @@ type FragmentAppendProgress = {
   stats: LoadStats;
   progressed: boolean;
   errored: boolean;
-  refusedOn?: MediaSource | null;
   fullyBuffered: Partial<Record<SourceBufferName, boolean>>;
 };
 
@@ -261,7 +260,7 @@ export default class BufferController extends Logger implements ComponentAPI {
 
   private initTracks() {
     const tracks = {};
-    this.fragmentAppendProgress = Object.create(null);
+    this.resetAppendProgress();
     this.sourceBuffers = [
       [null, null],
       [null, null],
@@ -1015,24 +1014,7 @@ transfer tracks: ${stringify(transferredTracks, (key, value) => (key === 'initSe
         }
 
         // Append exceptions use the existing append-error path.
-        if (
-          error.name === SOURCE_BUFFER_ERROR_NAME &&
-          isMediaFragment(frag) &&
-          !frag.gap &&
-          !chunkMeta.iframe
-        ) {
-          // Count once per append cycle. Part loads keep frag.stats, so the cycle is the
-          // MediaSource, which a recoverMediaError() reset replaces.
-          const progress = this.getFragmentAppendProgress(frag);
-          if (progress.refusedOn !== this.mediaSource) {
-            progress.refusedOn = this.mediaSource;
-            progress.errored = true;
-            this.countAppendWithoutProgress(frag, chunkMeta, error);
-            if (!this.hls) {
-              return;
-            }
-          }
-        } else if (trackProgress) {
+        if (trackProgress) {
           this.getFragmentAppendProgress(frag as MediaFragment).errored = true;
         }
         // in case any error occured while appending, put back segment in segments table
@@ -1458,15 +1440,6 @@ transfer tracks: ${stringify(transferredTracks, (key, value) => (key === 'initSe
       return;
     }
     // Also count parsed fragments that produced no append operations.
-    this.countAppendWithoutProgress(frag, chunkMeta);
-  }
-
-  private countAppendWithoutProgress(
-    frag: MediaFragment,
-    chunkMeta: ChunkMetadata,
-    appendError?: Error,
-  ) {
-    const key = appendProgressKey(frag);
     const count = (this.appendsWithoutProgress[key] || 0) + 1;
     // Capture values before a synchronous ERROR listener can destroy Hls.
     const hls = this.hls;
@@ -1487,11 +1460,9 @@ transfer tracks: ${stringify(transferredTracks, (key, value) => (key === 'initSe
       chunkMeta,
       parent: frag.type,
       appendsWithoutProgress: count,
-      error:
-        appendError ||
-        new Error(
-          `Fragment append did not increase buffered coverage (${count})`,
-        ),
+      error: new Error(
+        `Fragment append did not increase buffered coverage (${count})`,
+      ),
     });
   }
 

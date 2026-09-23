@@ -4,6 +4,7 @@ import { fakeXhr } from 'nise';
 import sinon from 'sinon';
 import sinonChai from 'sinon-chai';
 import { State } from '../../../src/controller/base-stream-controller';
+import { SOURCE_BUFFER_ERROR_NAME } from '../../../src/controller/buffer-controller';
 import { FragmentState } from '../../../src/controller/fragment-tracker';
 import { ErrorDetails, ErrorTypes } from '../../../src/errors';
 import { Events } from '../../../src/events';
@@ -418,6 +419,50 @@ describe('StreamController', function () {
         appendsWithoutProgress: 99,
       });
       expect(frag.gap).to.not.equal(true);
+    });
+  });
+
+  describe('onError MEDIA_SOURCE_REQUIRES_RESET', function () {
+    const resetError = (name: string, frag: MediaFragment): ErrorData => {
+      const error = new Error(
+        'video SourceBuffer error. MediaSource readyState: ended',
+      );
+      error.name = name;
+      return {
+        type: ErrorTypes.MEDIA_ERROR,
+        details: ErrorDetails.MEDIA_SOURCE_REQUIRES_RESET,
+        fatal: false,
+        error,
+        parent: PlaylistLevelType.MAIN,
+        frag,
+        part: null,
+      };
+    };
+    const newFrag = () => {
+      const frag = new Fragment(PlaylistLevelType.MAIN, '') as MediaFragment;
+      frag.sn = 3;
+      frag.level = 0;
+      return frag;
+    };
+
+    it('marks the fragment as a gap after a SourceBuffer error', function () {
+      const frag = newFrag();
+      streamController['onError'](
+        Events.ERROR,
+        resetError(SOURCE_BUFFER_ERROR_NAME, frag),
+      );
+      expect(frag.gap).to.equal(true);
+      expect(fragmentTracker.getState(frag)).to.equal(FragmentState.PARTIAL);
+    });
+
+    it('ignores a reset that another append error caused', function () {
+      const frag = newFrag();
+      streamController['onError'](
+        Events.ERROR,
+        resetError('InvalidStateError', frag),
+      );
+      expect(frag.gap).to.not.equal(true);
+      expect(fragmentTracker.getState(frag)).to.equal(FragmentState.NOT_LOADED);
     });
   });
 
