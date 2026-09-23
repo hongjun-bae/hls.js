@@ -205,16 +205,13 @@ describe('BaseStreamController', function () {
   });
 
   describe('getNextFragment after a SourceBuffer error', function () {
-    it('returns the fragment after the refused one and marks the playlist copy', function () {
+    it('returns the fragment after the refused one', function () {
       const levelDetails = levelDetailsWithEndSequenceVodOrLive(4);
       // a live playlist refresh builds a new object for the same sn and level
       refuse(mainFrag(1, levelDetails.fragments[1].level));
       fragmentTracker.gapSn = 1;
       const frag = baseStreamController.getNextFragment(5, levelDetails);
       expect(frag?.sn, 'skips to the next fragment').to.equal(2);
-      expect(levelDetails.fragments[1].gap, 'marks the playlist copy').to.equal(
-        true,
-      );
       expect(baseStreamController.nextLoadPosition).to.equal(10);
     });
 
