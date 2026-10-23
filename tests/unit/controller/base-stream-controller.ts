@@ -209,29 +209,17 @@ describe('BaseStreamController', function () {
     });
   });
 
-  describe('getNextFragment after a SourceBuffer error', function () {
-    it('returns the fragment after the refused one', function () {
+  describe('getNextFragment skips tracked gaps', function () {
+    it('returns the fragment after the gap', function () {
       const levelDetails = levelDetailsWithEndSequenceVodOrLive(4);
-      // a live playlist refresh builds a new object for the same sn and level
-      refuse(mainFrag(1, levelDetails.fragments[1].level));
       fragmentTracker.gapSn = 1;
       const frag = baseStreamController.getNextFragment(5, levelDetails);
       expect(frag?.sn, 'skips to the next fragment').to.equal(2);
       expect(baseStreamController.nextLoadPosition).to.equal(10);
     });
 
-    it('does not skip a refused fragment the tracker no longer holds as a gap', function () {
-      const levelDetails = levelDetailsWithEndSequenceVodOrLive(4);
-      refuse(levelDetails.fragments[1]);
-      fragmentTracker.gapSn = null;
-      expect(
-        baseStreamController.getNextFragment(5, levelDetails)?.sn,
-      ).to.equal(1);
-    });
-
-    it('returns null when the refused fragment is the last one', function () {
+    it('returns null when the gap is the last fragment', function () {
       const levelDetails = levelDetailsWithEndSequenceVodOrLive(2);
-      refuse(levelDetails.fragments[1]);
       fragmentTracker.gapSn = 1;
       expect(baseStreamController.getNextFragment(5, levelDetails)).to.equal(
         null,

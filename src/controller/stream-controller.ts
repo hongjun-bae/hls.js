@@ -547,6 +547,7 @@ export default class StreamController
     if (currentTime === null || !Number.isFinite(currentTime)) {
       return;
     }
+
     this.log(`Media seeked to ${currentTime}`);
 
     // If seeked was issued before buffer was appended do not tick immediately

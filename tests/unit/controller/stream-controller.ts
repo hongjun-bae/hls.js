@@ -644,14 +644,6 @@ describe('StreamController', function () {
       expect(fragmentTracker.isGap(details.fragments[2])).to.equal(true);
     });
 
-    it('does not mark again a previous fragment that is already a gap', function () {
-      const details = setLevelDetails(4);
-      fragmentTracker.addAsGap(details.fragments[1]);
-      const addAsGap = sinon.spy(fragmentTracker, 'addAsGap');
-      refuse(details.fragments[2], details.partList![4]);
-      expect(addAsGap).to.have.been.calledOnceWith(details.fragments[2]);
-    });
-
     it('does not mark fragments of an ended playlist', function () {
       const details = setLevelDetails(3, false);
       refuse(details.fragments[1]);
@@ -815,7 +807,7 @@ describe('StreamController', function () {
       expect(seekStub).to.have.been.calledOnce;
     });
 
-    function bufferFirstFragment() {
+    it('sets hasEnoughToStart after seeking to the start position', function () {
       const firstFrag = new Fragment(
         PlaylistLevelType.MAIN,
         '',
@@ -831,6 +823,11 @@ describe('StreamController', function () {
         endDTS: 5,
         endPTS: 5,
       };
+      let hasEnoughToStartWhenSeeking: boolean | undefined;
+      // @ts-ignore
+      sandbox.stub(streamController, 'seekToStartPos').callsFake(() => {
+        hasEnoughToStartWhenSeeking = streamController.hasEnoughToStart;
+      });
       streamController['fragCurrent'] = streamController['fragPrevious'] =
         firstFrag;
       streamController['onFragBuffered'](Events.FRAG_BUFFERED, {
@@ -839,15 +836,6 @@ describe('StreamController', function () {
         part: null,
         id: firstFrag.type,
       });
-    }
-
-    it('sets hasEnoughToStart after seeking to the start position', function () {
-      let hasEnoughToStartWhenSeeking: boolean | undefined;
-      // @ts-ignore
-      sandbox.stub(streamController, 'seekToStartPos').callsFake(() => {
-        hasEnoughToStartWhenSeeking = streamController.hasEnoughToStart;
-      });
-      bufferFirstFragment();
       expect(hasEnoughToStartWhenSeeking).to.equal(false);
       expect(streamController.hasEnoughToStart).to.equal(true);
     });

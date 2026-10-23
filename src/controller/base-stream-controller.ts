@@ -2258,7 +2258,6 @@ export default class BaseStreamController
     if (
       previous &&
       this.fragmentTracker.getState(previous) !== FragmentState.NOT_LOADED &&
-      !this.fragmentTracker.isGap(previous) &&
       !BufferHelper.isBuffered(
         this.mediaBuffer || this.media,
         start - this.config.maxBufferHole,
