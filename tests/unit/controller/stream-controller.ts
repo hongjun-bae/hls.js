@@ -815,7 +815,7 @@ describe('StreamController', function () {
       expect(seekStub).to.have.been.calledOnce;
     });
 
-    it('sets hasEnoughToStart after seeking to the start position', function () {
+    function bufferFirstFragment() {
       const firstFrag = new Fragment(
         PlaylistLevelType.MAIN,
         '',
@@ -831,11 +831,6 @@ describe('StreamController', function () {
         endDTS: 5,
         endPTS: 5,
       };
-      let hasEnoughToStartWhenSeeking: boolean | undefined;
-      // @ts-ignore
-      sandbox.stub(streamController, 'seekToStartPos').callsFake(() => {
-        hasEnoughToStartWhenSeeking = streamController.hasEnoughToStart;
-      });
       streamController['fragCurrent'] = streamController['fragPrevious'] =
         firstFrag;
       streamController['onFragBuffered'](Events.FRAG_BUFFERED, {
@@ -844,7 +839,29 @@ describe('StreamController', function () {
         part: null,
         id: firstFrag.type,
       });
+    }
+
+    it('sets hasEnoughToStart right away when seekToStartPos does not seek', function () {
+      let hasEnoughToStartWhenSeeking: boolean | undefined;
+      // @ts-ignore
+      sandbox.stub(streamController, 'seekToStartPos').callsFake(() => {
+        hasEnoughToStartWhenSeeking = streamController.hasEnoughToStart;
+      });
+      bufferFirstFragment();
       expect(hasEnoughToStartWhenSeeking).to.equal(false);
+      expect(streamController.hasEnoughToStart).to.equal(true);
+    });
+
+    it('sets hasEnoughToStart on seeked when seekToStartPos seeked', function () {
+      const media = streamController['media'] as any;
+      // @ts-ignore
+      sandbox.stub(streamController, 'seekToStartPos').callsFake(() => {
+        media.seeking = true;
+      });
+      bufferFirstFragment();
+      expect(streamController.hasEnoughToStart, 'until seeked').to.equal(false);
+      media.seeking = false;
+      streamController['onMediaSeeked']();
       expect(streamController.hasEnoughToStart).to.equal(true);
     });
 
