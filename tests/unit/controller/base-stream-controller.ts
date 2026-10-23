@@ -317,8 +317,17 @@ describe('BaseStreamController', function () {
         baseStreamController.onMediaSeeking();
         expect(
           fragmentTracker.removeFragmentsInRange,
-          'a later seek removes them',
+          'a later seek out of the buffer removes them',
         ).to.have.been.calledOnce;
+      });
+
+      it('keeps gaps on a seek into the buffer', function () {
+        sinon.stub(hls, 'hasEnoughToStart').get(() => true);
+        media.buffered = new TimeRangesMock([5, 20]);
+        media.currentTime = 10.0;
+
+        baseStreamController.onMediaSeeking();
+        expect(fragmentTracker.removeFragmentsInRange).to.have.not.been.called;
       });
 
       it('should call fragmentTracker.removeFragmentsInRange when media exists', function () {

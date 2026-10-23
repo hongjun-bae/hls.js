@@ -443,8 +443,8 @@ export default class BaseStreamController
     }
 
     if (media) {
-      if (this.hls?.hasEnoughToStart) {
-        // Remove gap fragments on seek after `seekToStartPos`
+      if (this.hls?.hasEnoughToStart && !fowardBuffer) {
+        // Remove gap fragments on a seek out of the buffer, after `seekToStartPos`
         this.fragmentTracker.removeFragmentsInRange(
           currentTime,
           Infinity,

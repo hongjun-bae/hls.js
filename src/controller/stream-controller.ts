@@ -547,14 +547,6 @@ export default class StreamController
     if (currentTime === null || !Number.isFinite(currentTime)) {
       return;
     }
-    if (
-      media &&
-      !this._hasEnoughToStart &&
-      BufferHelper.getBuffered(media).length
-    ) {
-      this._hasEnoughToStart = true;
-    }
-
     this.log(`Media seeked to ${currentTime}`);
 
     // If seeked was issued before buffer was appended do not tick immediately
@@ -1007,8 +999,7 @@ export default class StreamController
     }
     if (!this._hasEnoughToStart && BufferHelper.getBuffered(media).length) {
       this.seekToStartPos();
-      // Set once the seek issued by seekToStartPos() has been dispatched (see onMediaSeeked)
-      this._hasEnoughToStart = !media.seeking;
+      this._hasEnoughToStart = true;
     }
     if (bufferedMainFragment) {
       this.tick();
