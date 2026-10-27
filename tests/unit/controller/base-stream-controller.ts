@@ -90,9 +90,8 @@ describe('BaseStreamController', function () {
       isEndListAppended() {
         return true;
       },
-      gapSn: null,
-      isGap(frag) {
-        return this.gapSn !== null && frag.sn === this.gapSn;
+      isGap() {
+        return false;
       },
       gapFragments() {
         return this.gaps || [];
@@ -206,24 +205,6 @@ describe('BaseStreamController', function () {
       fragmentTracker.isEndListAppended = () => false;
       expect(baseStreamController._streamEnded(bufferInfo, levelDetails)).to.be
         .false;
-    });
-  });
-
-  describe('getNextFragment skips tracked gaps', function () {
-    it('returns the fragment after the gap', function () {
-      const levelDetails = levelDetailsWithEndSequenceVodOrLive(4);
-      fragmentTracker.gapSn = 1;
-      const frag = baseStreamController.getNextFragment(5, levelDetails);
-      expect(frag?.sn, 'skips to the next fragment').to.equal(2);
-      expect(baseStreamController.nextLoadPosition).to.equal(10);
-    });
-
-    it('returns null when the gap is the last fragment', function () {
-      const levelDetails = levelDetailsWithEndSequenceVodOrLive(2);
-      fragmentTracker.gapSn = 1;
-      expect(baseStreamController.getNextFragment(5, levelDetails)).to.equal(
-        null,
-      );
     });
   });
 
