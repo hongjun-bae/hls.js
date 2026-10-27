@@ -443,7 +443,11 @@ export default class BaseStreamController
     }
 
     if (media) {
-      if (this.hls?.hasEnoughToStart && !fowardBuffer) {
+      if (
+        this.hls?.hasEnoughToStart &&
+        !fowardBuffer &&
+        currentTime !== this.startPosition
+      ) {
         // Remove gap fragments on a seek out of the buffer, after `seekToStartPos`
         this.fragmentTracker.removeFragmentsInRange(
           currentTime,

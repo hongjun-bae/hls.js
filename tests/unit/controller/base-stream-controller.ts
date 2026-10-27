@@ -283,10 +283,28 @@ describe('BaseStreamController', function () {
         ).to.have.not.been.called;
 
         hasEnoughToStart.get(() => true);
+        media.currentTime = 12.0;
         baseStreamController.onMediaSeeking();
         expect(
           fragmentTracker.removeFragmentsInRange,
           'a later seek out of the buffer removes them',
+        ).to.have.been.calledOnce;
+      });
+
+      it('keeps gaps on the seek to the start position that lands outside the buffer', function () {
+        sinon.stub(hls, 'hasEnoughToStart').get(() => true);
+        baseStreamController.startPosition = 10.0;
+        media.buffered = new TimeRangesMock([14, 20]);
+        media.currentTime = 10.0;
+
+        baseStreamController.onMediaSeeking();
+        expect(fragmentTracker.removeFragmentsInRange).to.have.not.been.called;
+
+        media.currentTime = 11.0;
+        baseStreamController.onMediaSeeking();
+        expect(
+          fragmentTracker.removeFragmentsInRange,
+          'a seek elsewhere out of the buffer removes them',
         ).to.have.been.calledOnce;
       });
 
